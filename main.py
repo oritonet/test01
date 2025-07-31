@@ -2,7 +2,7 @@ import os
 import flet as ft
 
 async def main(page: ft.Page):
-    page.title = "Flet Web App on Render"
+    page.title = "Happy!!"
     page.vertical_alignment = ft.MainAxisAlignment.CENTER
     txt = ft.Text(value="Hello Render!", size=30)
     page.add(txt)
