@@ -1,10 +1,10 @@
 import flet as ft
 from fastapi import FastAPI
-import uvicorn
 
+# FastAPIアプリを作成
 app = FastAPI()
 
-@ft.app(target="/", view=None)
+@ft.app(target="/", view=None)  # ルートパスでFletアプリを公開
 def main(page: ft.Page):
     page.title = "Flet counter example"
     page.vertical_alignment = ft.MainAxisAlignment.CENTER
