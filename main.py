@@ -1,6 +1,6 @@
 import flet as ft
 
-def main(page: ft.Page):
+async def main(page: ft.Page):
     page.title = "Flet counter example"
     txt = ft.TextField(value="0", text_align=ft.TextAlign.RIGHT, width=100)
 
@@ -23,4 +23,4 @@ def main(page: ft.Page):
         )
     )
 
-ft.app(target=main)
+ft.app_async(target=main)  # ← async版を使う！
