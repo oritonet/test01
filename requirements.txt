@@ -1,2 +1,2 @@
-flet>=0.20.0
-uvicorn
+flet>=0.28.3
+flet-cli>=0.28.3
