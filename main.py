@@ -23,4 +23,4 @@ async def main(page: ft.Page):
         )
     )
 
-ft.app_async(target=main)  # ← async版を使う！
+ft.app(target=main)
