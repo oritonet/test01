@@ -1,20 +1,25 @@
-import flet as ft # 1.
+import flet as ft
+from fastapi import FastAPI
+import uvicorn
 
-def main(page: ft.Page): # 2.
-    page.title = "Flet counter example" # 3.
-    page.vertical_alignment = ft.MainAxisAlignment.CENTER # 4.
+app = FastAPI()
 
-    txt_number = ft.TextField(value="0", text_align=ft.TextAlign.RIGHT, width=100) # 5.
+@ft.app(target="/", view=None)
+def main(page: ft.Page):
+    page.title = "Flet counter example"
+    page.vertical_alignment = ft.MainAxisAlignment.CENTER
 
-    def minus_click(e): # 6.
+    txt_number = ft.TextField(value="0", text_align=ft.TextAlign.RIGHT, width=100)
+
+    def minus_click(e):
         txt_number.value = str(int(txt_number.value) - 1)
         page.update()
 
-    def plus_click(e): # 6.
+    def plus_click(e):
         txt_number.value = str(int(txt_number.value) + 1)
         page.update()
 
-    page.add( # 7.
+    page.add(
         ft.Row(
             [
                 ft.IconButton(ft.Icons.REMOVE, on_click=minus_click),
@@ -24,5 +29,3 @@ def main(page: ft.Page): # 2.
             alignment=ft.MainAxisAlignment.CENTER,
         )
     )
-
-ft.app(target=main) # 8.
