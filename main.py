@@ -1,8 +1,9 @@
+from flet.fastapi import FastAPI
 import flet as ft
 
 def main(page: ft.Page):
-    page.title = "My Flet App on Render"
-    page.add(ft.Text("Hello, Flet!"))
-    
-if __name__ == "__main__":
-    ft.app(target=main)
+    page.title = "Flet Render Web App"
+    txt = ft.Text("Hello from Flet on Render!")
+    page.add(txt)
+
+app = FastAPI(target=main)
