@@ -1,110 +1,132 @@
 import os
-import flet as ft            # Flet 本体
-from flet import Icons, Colors   # アイコンと色の定数
+import json
+from datetime import datetime
+import flet as ft
+from flet import Icons, Colors
 
-#────────────────────────────────────────
-# 単一タスク（To-Do）を表すコンポーネント
-#────────────────────────────────────────
+DATA_FILE = "data.json"
+
+#──────────────────────────────
+# タスク保存・読み込み
+#──────────────────────────────
+def save_tasks(task_list):
+    data = []
+    for t in task_list:
+        data.append({
+            "name": t.task_name,
+            "completed": t.completed,
+            "created_at": t.created_at,
+            "updated_at": t.updated_at,
+        })
+    with open(DATA_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+
+def load_tasks():
+    if not os.path.exists(DATA_FILE):
+        return []
+    with open(DATA_FILE, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+#──────────────────────────────
+# タスク（1行分）
+#──────────────────────────────
 class Task(ft.Column):
-    def __init__(self, task_name, task_status_change, task_delete):
-        super().__init__()                     # 親クラス(ft.Column) の初期化
-        self.completed = False                 # 完了フラグ
-        self.task_name = task_name             # 表示用タスク名
-        self.task_status_change = task_status_change  # 状態変化コールバック
-        self.task_delete = task_delete                 # 削除コールバック
+    def __init__(self, task_name, task_status_change, task_delete,
+                 created_at=None, updated_at=None):
+        super().__init__()
+        self.completed = False
+        self.task_name = task_name
+        self.task_status_change = task_status_change
+        self.task_delete = task_delete
 
-        # チェックボックス（タスク名表示用）
-        self.display_task = ft.Checkbox(
-            value=False,                       # 既定は未完了
-            label=self.task_name,              # ラベルにタスク名
-            on_change=self.status_changed      # チェック変更時ハンドラ
+        now = datetime.now().strftime("%m月%d日")
+        self.created_at = created_at or now
+        self.updated_at = updated_at or now
+
+        # 編集日時表示（通常ビューの削除ボタンの右側）
+        self.update_label = ft.Text(
+            f"編集: {self.updated_at}",
+            size=8,
+            color=Colors.GREY,
         )
 
-        self.edit_name = ft.TextField(expand=1)  # 編集用テキストフィールド
+        self.display_task = ft.Checkbox(
+            value=False,
+            label=ft.Text(self.task_name, max_lines=1, overflow="ellipsis", width=250),
+            on_change=self.status_changed,
+        )
 
-        # ── 通常表示ビュー（チェックボックス＋アイコンボタン×2）
+        self.edit_name = ft.TextField(expand=1)
+
         self.display_view = ft.Row(
-            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,     # 端と端に配置
-            vertical_alignment=ft.CrossAxisAlignment.CENTER,  # 縦中央
+            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
             controls=[
-                self.display_task,                            # 左：チェックボックス
-                ft.Row(                                       # 右：アイコンボタン列
-                    spacing=0,
+                self.display_task,
+                ft.Row(
+                    spacing=5,
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
                     controls=[
-                        ft.IconButton(                        # 編集ボタン
-                            icon=Icons.CREATE_OUTLINED,
-                            tooltip="Edit To-Do",
-                            on_click=self.edit_clicked,
-                        ),
-                        ft.IconButton(                        # 削除ボタン
-                            icon=Icons.DELETE_OUTLINE,
-                            tooltip="Delete To-Do",
-                            on_click=self.delete_clicked,
-                        ),
-                    ],
+                        ft.IconButton(icon=Icons.CREATE_OUTLINED, tooltip="編集", on_click=self.edit_clicked),
+                        ft.IconButton(icon=Icons.DELETE_OUTLINE, tooltip="削除", on_click=self.delete_clicked),
+                        self.update_label,  # 削除ボタンの右に配置
+                    ]
                 ),
             ],
         )
 
-        # ── 編集ビュー（テキスト入力＋保存ボタン）
         self.edit_view = ft.Row(
-            visible=False,                                    # 初期は非表示
+            visible=False,
             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
             controls=[
-                self.edit_name,                               # 左：入力欄
-                ft.IconButton(                                # 右：保存ボタン
+                self.edit_name,
+                ft.IconButton(
                     icon=Icons.DONE_OUTLINE_OUTLINED,
                     icon_color=Colors.GREEN,
-                    tooltip="Update To-Do",
+                    tooltip="保存",
                     on_click=self.save_clicked,
                 ),
             ],
         )
 
-        # Column の children に 2ビューを登録
         self.controls = [self.display_view, self.edit_view]
 
-    #―― 編集アイコン押下：編集ビューを表示
     def edit_clicked(self, e):
-        self.edit_name.value = self.display_task.label       # 現在のタスク名をセット
-        self.display_view.visible = False                    # 通常ビュー非表示
-        self.edit_view.visible = True                        # 編集ビュー表示
-        self.update()                                        # 画面更新
+        self.edit_name.value = self.display_task.label.value
+        self.display_view.visible = False
+        self.edit_view.visible = True
+        self.update()
 
-    #―― 保存ボタン押下：名称更新して通常ビューへ戻す
     def save_clicked(self, e):
-        self.display_task.label = self.edit_name.value       # ラベル更新
+        new_name = self.edit_name.value
+        if new_name:
+            self.task_name = new_name
+            self.display_task.label.value = new_name
+            self.updated_at = datetime.now().strftime("%m月%d日")
+            self.update_label.value = f"編集: {self.updated_at}"
         self.display_view.visible = True
         self.edit_view.visible = False
         self.update()
+        self.task_status_change(self)  # 保存処理も呼ぶ
 
-    #―― チェック状態変更時：完了フラグ更新＆親へ通知
     def status_changed(self, e):
         self.completed = self.display_task.value
-        self.task_status_change(self)                        # コールバック
+        self.task_status_change(self)
 
-    #―― 削除ボタン押下：親へ削除要求
     def delete_clicked(self, e):
         self.task_delete(self)
 
-#────────────────────────────────────────
-# To-Do アプリ全体を表すコンポーネント
-#────────────────────────────────────────
+#──────────────────────────────
+# Todo アプリ全体
+#──────────────────────────────
 class TodoApp(ft.Column):
     def __init__(self):
         super().__init__()
 
-        #―― 新規タスク入力フィールド
-        self.new_task = ft.TextField(
-            hint_text="ここに内容記入",
-            on_submit=self.add_clicked,  # Enter で追加
-            expand=True                 # 幅いっぱい
-        )
-
-        self.tasks = ft.Column()        # 追加タスクを並べる列
-
-        #―― タブ（フィルター：all / active / completed）
+        self.new_task = ft.TextField(hint_text="ここに内容記入", on_submit=self.add_clicked, expand=True)
+        self.tasks = ft.Column()
         self.filter = ft.Tabs(
             scrollable=False,
             selected_index=0,
@@ -112,101 +134,100 @@ class TodoApp(ft.Column):
             tabs=[
                 ft.Tab(text="全て"),
                 ft.Tab(text="アクティブ"),
-                ft.Tab(text="完了")
+                ft.Tab(text="完了"),
             ],
         )
+        self.items_left = ft.Text("0 items left")
 
-        self.items_left = ft.Text("0 items left")  # 残件数表示
-
-        self.width = 600               # アプリ幅
-
-        # Column(child) 構築
+        self.width = 600
         self.controls = [
-            # タイトル
-            ft.Row(
-                [ft.Text(value="Todoリスト", theme_style=ft.TextThemeStyle.HEADLINE_MEDIUM)],
-                alignment=ft.MainAxisAlignment.CENTER,
-            ),
-            # 入力行（テキスト＋追加ボタン）
-            ft.Row(
-                controls=[
-                    self.new_task,
-                    ft.FloatingActionButton(icon=Icons.ADD, on_click=self.add_clicked),
-                ],
-            ),
-            # タスク一覧＋フッタ
+            ft.Row([ft.Text("Todoリスト", theme_style=ft.TextThemeStyle.HEADLINE_MEDIUM)],
+                   alignment=ft.MainAxisAlignment.CENTER),
+            ft.Row(controls=[self.new_task,
+                             ft.FloatingActionButton(icon=Icons.ADD, on_click=self.add_clicked)]),
             ft.Column(
                 spacing=25,
                 controls=[
-                    self.filter,        # フィルタタブ
-                    self.tasks,         # タスクリスト
-                    # フッタ（残件数＋Clear button）
+                    self.filter,
+                    self.tasks,
                     ft.Row(
                         alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                         vertical_alignment=ft.CrossAxisAlignment.CENTER,
                         controls=[
                             self.items_left,
-                            ft.OutlinedButton(text="完了タスクを削除",
-                                              on_click=self.clear_clicked),
+                            ft.OutlinedButton(text="完了タスクを削除", on_click=self.clear_clicked),
                         ],
                     ),
                 ],
             ),
         ]
 
-    #―― タスク追加（Enter または ＋ボタン）
-    def add_clicked(self, e):
-        if self.new_task.value:                       # 入力が空でなければ
-            task = Task(self.new_task.value,
-                        self.task_status_change,
-                        self.task_delete)
-            self.tasks.controls.append(task)          # リストに追加
-            self.new_task.value = ""                  # 入力欄クリア
-            self.new_task.focus()                     # フォーカス戻す
-            self.update()
+        # 保存ファイルから読み込み
+        for data in load_tasks():
+            task = Task(
+                task_name=data["name"],
+                task_status_change=self.task_status_change,
+                task_delete=self.task_delete,
+                created_at=data.get("created_at"),
+                updated_at=data.get("updated_at"),
+            )
+            task.display_task.value = data["completed"]
+            task.completed = data["completed"]
+            self.tasks.controls.append(task)
 
-    #―― タスクの完了状態変化時
+    def add_clicked(self, e):
+        name = self.new_task.value
+        if name:
+            task = Task(name, self.task_status_change, self.task_delete)
+            self.tasks.controls.append(task)
+            self.new_task.value = ""
+            self.new_task.focus()
+            self.update()
+            save_tasks(self.tasks.controls)
+
     def task_status_change(self, task):
         self.update()
+        save_tasks(self.tasks.controls)
 
-    #―― タスク削除
     def task_delete(self, task):
         self.tasks.controls.remove(task)
         self.update()
+        save_tasks(self.tasks.controls)
 
-    #―― フィルタタブ切り替え
     def tabs_changed(self, e):
         self.update()
 
-    #―― 「Clear completed」押下：完了タスク一括削除
     def clear_clicked(self, e):
-        for task in self.tasks.controls[:]:           # コピーで安全に反復
+        for task in self.tasks.controls[:]:
             if task.completed:
                 self.task_delete(task)
+        save_tasks(self.tasks.controls)
 
-    #―― 更新前フック：可視状態と残件数を調整
     def before_update(self):
-        status = self.filter.tabs[self.filter.selected_index].text  # 現在タブ
+        status = self.filter.tabs[self.filter.selected_index].text
         count = 0
         for task in self.tasks.controls:
-            # タブ状態に応じて表示／非表示
             task.visible = (
-                status == "全て" or
-                (status == "アクティブ" and not task.completed) or
-                (status == "完了" and task.completed)
+                status == "全て"
+                or (status == "アクティブ" and not task.completed)
+                or (status == "完了" and task.completed)
             )
             if not task.completed:
                 count += 1
-        self.items_left.value = f"アクティブ数:{count}"
+        self.items_left.value = f"アクティブ数: {count}"
 
-#────────────────────────────────────────
-# Flet アプリ エントリポイント
-#────────────────────────────────────────
+#──────────────────────────────
+# エントリポイント
+#──────────────────────────────
 def main(page: ft.Page):
-    page.title = "ToDoリスト"                 # ページタイトル
+    page.title = "ToDoリスト"
+    page.window_width = 375
+    page.window_height = 667
+    page.window_resizable = False
     page.horizontal_alignment = ft.CrossAxisAlignment.CENTER
-    page.scroll = ft.ScrollMode.ADAPTIVE    # スクロール自動
-    page.add(TodoApp())                     # TodoApp をページに配置
+    page.scroll = ft.ScrollMode.ADAPTIVE
+    page.add(TodoApp())
+
 
 if __name__ == "__main__":
     ft.app(target=main, port=int(os.environ.get("PORT", 8550)), host="0.0.0.0")
