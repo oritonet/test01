@@ -221,9 +221,6 @@ class TodoApp(ft.Column):
 #──────────────────────────────
 def main(page: ft.Page):
     page.title = "ToDoリスト"
-    page.window_width = 375
-    page.window_height = 667
-    page.window_resizable = False
     page.horizontal_alignment = ft.CrossAxisAlignment.CENTER
     page.scroll = ft.ScrollMode.ADAPTIVE
     page.add(TodoApp())
