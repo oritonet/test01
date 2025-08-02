@@ -53,7 +53,7 @@ class Task(ft.Column):
 
         self.display_task = ft.Checkbox(
             value=False,
-            label=ft.Text(self.task_name, max_lines=1, overflow="ellipsis", width=250),
+            label=ft.Text(self.task_name, max_lines=1, overflow="ellipsis", width=150),
             on_change=self.status_changed,
         )
 
