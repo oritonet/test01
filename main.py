@@ -1,32 +1,47 @@
 import os
-import json
-from datetime import datetime
+import psycopg2
 import flet as ft
+from datetime import datetime
 from flet import Icons, Colors
 
-DATA_FILE = "data.json"
-
 #──────────────────────────────
-# タスク保存・読み込み
+# DB 接続設定
 #──────────────────────────────
-def save_tasks(task_list):
-    data = []
-    for t in task_list:
-        data.append({
-            "name": t.task_name,
-            "completed": t.completed,
-            "created_at": t.created_at,
-            "updated_at": t.updated_at,
-        })
-    with open(DATA_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+def get_conn():
+    return psycopg2.connect(
+        host=os.environ["DB_HOST"],
+        dbname=os.environ["DB_NAME"],
+        user=os.environ["DB_USER"],
+        password=os.environ["DB_PASSWORD"],
+        port=5432
+    )
 
+def save_tasks_to_db(tasks):
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM todos")
+    for t in tasks:
+        cur.execute(
+            "INSERT INTO todos (name, completed, created_at, updated_at) VALUES (%s, %s, %s, %s)",
+            (t.task_name, t.completed, t.created_at, t.updated_at)
+        )
+    conn.commit()
+    cur.close()
+    conn.close()
 
-def load_tasks():
-    if not os.path.exists(DATA_FILE):
-        return []
-    with open(DATA_FILE, "r", encoding="utf-8") as f:
-        return json.load(f)
+def load_tasks_from_db():
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT name, completed, created_at, updated_at FROM todos")
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    return [{
+        "name": r[0],
+        "completed": r[1],
+        "created_at": r[2],
+        "updated_at": r[3],
+    } for r in rows]
 
 #──────────────────────────────
 # タスク（1行分）
@@ -39,58 +54,38 @@ class Task(ft.Column):
         self.task_name = task_name
         self.task_status_change = task_status_change
         self.task_delete = task_delete
-
         now = datetime.now().strftime("%m月%d日")
         self.created_at = created_at or now
         self.updated_at = updated_at or now
 
-        # 編集日時表示（通常ビューの削除ボタンの右側）
-        self.update_label = ft.Text(
-            f"編集: {self.updated_at}",
-            size=8,
-            color=Colors.GREY,
-        )
-
+        self.update_label = ft.Text(f"編集: {self.updated_at}", size=8, color=Colors.GREY)
         self.display_task = ft.Checkbox(
             value=False,
             label=ft.Text(self.task_name, max_lines=1, overflow="ellipsis", width=150),
             on_change=self.status_changed,
         )
-
         self.edit_name = ft.TextField(expand=1)
-
         self.display_view = ft.Row(
             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
             controls=[
                 self.display_task,
-                ft.Row(
-                    spacing=5,
-                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                    controls=[
-                        ft.IconButton(icon=Icons.CREATE_OUTLINED, tooltip="編集", on_click=self.edit_clicked),
-                        ft.IconButton(icon=Icons.DELETE_OUTLINE, tooltip="削除", on_click=self.delete_clicked),
-                        self.update_label,  # 削除ボタンの右に配置
-                    ]
-                ),
+                ft.Row(spacing=5, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[
+                    ft.IconButton(icon=Icons.CREATE_OUTLINED, tooltip="編集", on_click=self.edit_clicked),
+                    ft.IconButton(icon=Icons.DELETE_OUTLINE, tooltip="削除", on_click=self.delete_clicked),
+                    self.update_label
+                ])
             ],
         )
-
         self.edit_view = ft.Row(
             visible=False,
             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
             controls=[
                 self.edit_name,
-                ft.IconButton(
-                    icon=Icons.DONE_OUTLINE_OUTLINED,
-                    icon_color=Colors.GREEN,
-                    tooltip="保存",
-                    on_click=self.save_clicked,
-                ),
+                ft.IconButton(icon=Icons.DONE_OUTLINE_OUTLINED, icon_color=Colors.GREEN, tooltip="保存", on_click=self.save_clicked),
             ],
         )
-
         self.controls = [self.display_view, self.edit_view]
 
     def edit_clicked(self, e):
@@ -109,7 +104,7 @@ class Task(ft.Column):
         self.display_view.visible = True
         self.edit_view.visible = False
         self.update()
-        self.task_status_change(self)  # 保存処理も呼ぶ
+        self.task_status_change(self)
 
     def status_changed(self, e):
         self.completed = self.display_task.value
@@ -131,11 +126,7 @@ class TodoApp(ft.Column):
             scrollable=False,
             selected_index=0,
             on_change=self.tabs_changed,
-            tabs=[
-                ft.Tab(text="全て"),
-                ft.Tab(text="アクティブ"),
-                ft.Tab(text="完了"),
-            ],
+            tabs=[ft.Tab(text="全て"), ft.Tab(text="アクティブ"), ft.Tab(text="完了")],
         )
         self.items_left = ft.Text("0 items left")
 
@@ -162,8 +153,7 @@ class TodoApp(ft.Column):
             ),
         ]
 
-        # 保存ファイルから読み込み
-        for data in load_tasks():
+        for data in load_tasks_from_db():
             task = Task(
                 task_name=data["name"],
                 task_status_change=self.task_status_change,
@@ -183,16 +173,16 @@ class TodoApp(ft.Column):
             self.new_task.value = ""
             self.new_task.focus()
             self.update()
-            save_tasks(self.tasks.controls)
+            save_tasks_to_db(self.tasks.controls)
 
     def task_status_change(self, task):
         self.update()
-        save_tasks(self.tasks.controls)
+        save_tasks_to_db(self.tasks.controls)
 
     def task_delete(self, task):
         self.tasks.controls.remove(task)
         self.update()
-        save_tasks(self.tasks.controls)
+        save_tasks_to_db(self.tasks.controls)
 
     def tabs_changed(self, e):
         self.update()
@@ -201,7 +191,7 @@ class TodoApp(ft.Column):
         for task in self.tasks.controls[:]:
             if task.completed:
                 self.task_delete(task)
-        save_tasks(self.tasks.controls)
+        save_tasks_to_db(self.tasks.controls)
 
     def before_update(self):
         status = self.filter.tabs[self.filter.selected_index].text
@@ -224,7 +214,6 @@ def main(page: ft.Page):
     page.horizontal_alignment = ft.CrossAxisAlignment.CENTER
     page.scroll = ft.ScrollMode.ADAPTIVE
     page.add(TodoApp())
-
 
 if __name__ == "__main__":
     ft.app(target=main, port=int(os.environ.get("PORT", 8550)), host="0.0.0.0")
